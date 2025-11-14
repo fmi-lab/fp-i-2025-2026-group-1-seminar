@@ -22,4 +22,8 @@ cabal.project.local~
 .HTF/
 .ghc.environment.*
 
-Prelimitary.hs
+prelimitary*
+Prelimitary*
+*.txt
+*.json
+*.exe
