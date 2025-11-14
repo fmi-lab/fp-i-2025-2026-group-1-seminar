@@ -1,6 +1,6 @@
 {-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
 {-# HLINT ignore "Use fold" #-}
-import Prelude hiding (Maybe, Just, Nothing, maybe, Either, Left, Right, either, Semigroup, Monoid, (<>), mconcat, mempty, mappend)
+import Prelude hiding (Maybe, Just, Nothing, maybe, Either, Left, Right, either, Semigroup, Monoid, (<>), mconcat, mempty, mappend, Functor, (<$>), fmap)
 
 import DataTypes
 
@@ -20,7 +20,7 @@ data Student = Student {
   name :: String,
   email :: String,
   phone :: Maybe String
-} deriving Show
+}
 
 data ValidationError =
   InvalidFnError |
@@ -126,3 +126,85 @@ instance Foldable (Either a) where
   foldr :: (b -> c -> c) -> c -> Either a b -> c
   foldr op nv (Left _) = nv
   foldr op nv (Right x) = op x nv
+
+data Json = 
+  JsonNull |
+  JsonBool Bool |
+  JsonNumber Double |
+  JsonString String |
+  JsonArray [Json] |
+  JsonObject [(String, Json)]
+
+class JsonSerializable a where
+  toJson :: a -> Json
+  toJsonString :: a -> String
+  toJsonString = show . toJson 
+
+joinMap :: (a -> String) -> String -> [a] -> String
+joinMap f delim [] = ""
+joinMap f delim (x:xs) = foldl (\result current -> result ++ delim ++ f current) (f x) xs
+
+instance Show Json where
+  show :: Json -> String
+  show JsonNull = "null"
+  show (JsonBool b) = 
+    let (x:xs) = show b
+    in toEnum (fromEnum x - fromEnum 'A' + fromEnum 'a') : xs
+  show (JsonNumber d) = show d
+  show (JsonString s) = show s
+  show (JsonArray l) = "[" ++ joinMap show ", " l ++ "]"
+  show (JsonObject l) = "{" ++ joinMap (\(key, value) -> "\"" ++ key ++ "\":" ++ show value) ",\n" l ++ "}"
+
+instance JsonSerializable a => JsonSerializable (Maybe a) where 
+  toJson :: JsonSerializable a => Maybe a -> Json
+  toJson Nothing = JsonNull
+  toJson (Just x) = toJson x
+
+instance JsonSerializable String where
+  toJson :: String -> Json
+  toJson = JsonString
+  
+instance JsonSerializable Student where  
+  toJson :: Student -> Json
+  toJson (Student fn name email phone) = 
+    JsonObject [
+      ("fn", toJson fn),
+      ("name", toJson name),
+      ("email", toJson email),
+      ("phone", toJson phone)
+    ]
+
+student1 :: Student
+student1 = Student "3MI0800092" "Georgi Atanasov" "nigosto@gmail.com" Nothing
+
+student2 :: Student
+student2 = Student "0MI0800065" "Rosen Kolev" "master_troppical@gmail.com" (Just "0888547128")
+
+instance Semigroup Json where
+  (<>) :: Json -> Json -> Json
+  (JsonArray l1) <> (JsonArray l2) = JsonArray $ l1 ++ l2
+  x <> (JsonArray l) = JsonArray $ x:l
+  x <> y = JsonArray [x, y]
+
+instance Monoid Json where 
+  mempty :: Json
+  mempty = JsonArray []
+
+serializeStudents :: [Student] -> String
+serializeStudents = show . mconcat . map toJson 
+
+class Functor f where
+  fmap :: (a -> b) -> f a -> f b
+
+  (<$>) :: (a -> b) -> f a -> f b
+  (<$>) = fmap
+
+instance Functor Maybe where  
+  fmap :: (a -> b) -> Maybe a -> Maybe b
+  fmap f Nothing = Nothing
+  fmap f (Just x) = Just $ f x
+
+instance Functor (Either a) where  
+  fmap :: (b -> c) -> Either a b -> Either a c
+  fmap _ (Left a) = Left a
+  fmap f (Right b) = Right $ f b
